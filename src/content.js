@@ -92,5 +92,43 @@
         }catch(e){}
         
         return true;
-    }   
+    }
+    
+    
+    // Tier 2: NeoVision  (DOM text + position)
+    function findSkipButtonViaNeo(){
+        const player = document.getElementById('movie_player');
+        if(!player) return null;
+
+        const clickables = player.querySelectorAll('button, [role="button"], .ytp-button');
+        const skipKeywords = ['skip', 'saltar', 'ignorer', 'überspringen', 'passer', 'ignora', 'skip ad'];
+
+        for (const el of clickables){
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) continue;
+            const text = (el.innerText || el.getAttribute('aria-label') || '').toLowerCase();
+            if (skipKeywords.some(kw => text.includes(kw))){
+                return el;
+            }
+        }
+
+        // Positional heuristic: bottom-right quadrant of video
+        const video = player.querySelector('video');
+        if(video){
+            const vRect = video.getBoundingClientRect();
+            for (const el of clickables){
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 50 || rect.height < 20) continue;
+                const centerX = rect.x + rect.width / 2;
+                const cebnterY = rect.y + rect.height / 2;
+                if(centerX > vRect.left + vRect.width * 0.6 && centerY > vRect.top + vRect.height * 0.6){
+                    const style = window.getComputedStyle(el);
+                    if (style.cursor === 'pointer'){
+                        return el;
+                    }
+                }
+            }
+        }
+        return null;
+    }
 })
