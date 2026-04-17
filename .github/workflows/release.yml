@@ -1,0 +1,51 @@
+name: Build and Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Package Extension
+        run: |
+          zip -r auto-ad-skipper.xpi . -x "*.git*" ".github/*" "node_modules/*" "*.md" "*.log"
+
+      - name: Create Release and Upload Asset
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            auto-ad-skipper.xpi
+          generate_release_notes: true
+
+      - name: Generate Update Manifest
+        uses: 2zqa/generate-update-manifest@v1
+        with:
+          addon-id: 'auto-ad-skipper@Abdallah72730.github.io'
+          asset-filter: '*.xpi'
+          output-file: 'updates.json'
+
+      - name: Upload Update Manifest
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            updates.json
