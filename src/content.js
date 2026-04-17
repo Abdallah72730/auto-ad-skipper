@@ -52,8 +52,8 @@
                 cancelable: true,
                 clientX: centerX,
                 clientY: centerY,
-                screenX = window.screenX + centerX,
-                screenY = window.screenY + centerY
+                screenX:  window.screenX + centerX,
+                screenY:  window.screenY + centerY
             };
             const events = [
                 new MouseEvent('mouseover', eventOptions),
@@ -73,7 +73,7 @@
                     target = Array.from(btns).find(btn => {
                         const text = (btn.innerText || btn.getAttribute('aria-label') || '').toLowerCase();
                         
-                        return btn.offsetParent !== null & text.includes('skip');
+                        return btn.offsetParent !== null && text.includes('skip');
                     });
                 }
                 if (target) target.click();
@@ -120,7 +120,7 @@
                 const rect = el.getBoundingClientRect();
                 if (rect.width < 50 || rect.height < 20) continue;
                 const centerX = rect.x + rect.width / 2;
-                const cebnterY = rect.y + rect.height / 2;
+                const centerY = rect.y + rect.height / 2;
                 if(centerX > vRect.left + vRect.width * 0.6 && centerY > vRect.top + vRect.height * 0.6){
                     const style = window.getComputedStyle(el);
                     if (style.cursor === 'pointer'){
@@ -138,14 +138,22 @@
     let ortSession = null;
     let ortLib = null;
 
-    async function initONXX(){
+    async function initONNX() {
         if (ortSession) return;
-        //ort is global if loaded via manifest content_scripts
-        ortLib = (typeof ort !== 'undefined') ? ort : (await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/esm/ort.min.js')).default;
+
+        // Load ONNX Runtime Web dynamically from CDN
+        if (!ortLib) {
+            console.log('AI Detector: Loading ONNX Runtime from CDN...');
+            ortLib = await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/esm/ort.min.js');
+            console.log('AI Detector: ONNX Runtime loaded.');
+        }
+
         const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
-        console.log('AI Detector: Loading model from ', modelUrl);
-        ortSession = await ortLib.InferenceSession.create(modelUrl, {"executionProviders": ['wasm']});
-        console.log('AI detector: Model loaded.');
+        console.log('AI Detector: Loading model from', modelUrl);
+        ortSession = await ortLib.InferenceSession.create(modelUrl, {
+            executionProviders: ['wasm']
+        });
+        console.log('AI Detector: Model loaded.');
     }
 
     async function preprocessYOLO(canvas, targetSize){
@@ -173,7 +181,7 @@
     }
 
 
-    async function postprocessYOLO(outputTensor, imgWidth, imgHeight, confThreshold =0.5){
+    function postprocessYOLO(outputTensor, imgWidth, imgHeight, confThreshold =0.5){
         const data = outputTensor.data;
         const [batch, numChannels, numAnchors] = outputTensor.dims;
         const numClasses = numChannels - 4;
@@ -256,10 +264,10 @@
 
     // ------ Main Orchestrator -------
     let checkScheduled = false;
-    let lastTimeChecked = 0;
+    let lastCheckTime = 0;
     const CHECK_COOLDOWN_MS = 500;
 
-    async function trySkipButton(){
+    async function tryClickSkipButton(){
         const player = document.getElementById('movie_player');
         if (!player) return false;
 
@@ -292,6 +300,18 @@
             }
         }catch(e){
             console.warn("Auto Ad Skipper: NeoVision error", e);
+        }
+
+        // === Tier 3: AI Vision ===
+        try {
+            const aiButton = await findSkipButtonViaAI();
+            if (aiButton) {
+                await humanClick(aiButton);
+                console.log('Auto Ad Skipper: Skipped via AI Vision');
+                return true;
+            }
+        } catch (e) {
+            console.error('Auto Ad Skipper: AI error', e);
         }
 
         return false;
@@ -341,6 +361,6 @@
             console.log("Auto Ad Skipper: Observer Active ");
             scheduleCheck();
         }
-        
+
         startObserver()
 })();

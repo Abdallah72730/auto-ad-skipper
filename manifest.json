@@ -17,7 +17,7 @@
     "web_accessible_resources":[
         {
             "resources":["src/model/*.onnx"],
-            "matches": ["*.//*.youtube.com/*"]
+            "matches": ["*://*.youtube.com/*"]
         }
     ],
     "browser_specific_settings":{
