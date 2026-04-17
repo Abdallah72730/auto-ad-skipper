@@ -309,8 +309,27 @@
             });
         }
 
-        
+        function startObserver() {
+            const player = document.getElementById('movie_player');
+            if (!player) {
+                setTimeout(startObserver, 1000);
+                return;
+            }
+            const adContainers = [
+                player.querySelector('.ytp-ad-module'),
+                player.querySelector('.ytp-ad-player-overlay'),
+                player.querySelector('.ytp-ad-image-overlay'),
+                player
+            ].filter(Boolean);
 
-
+            const observer = new MutationObserver((mutations) => {
+                for (const mut of mutations) {
+                    if (mut.addedNodes.length > 0) {
+                        scheduleCheck();
+                        break;
+                    }
+                }
+            });
+        }
     }
 })
