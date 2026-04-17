@@ -199,7 +199,7 @@
     }
 
     async function findSkipButtonViaAI() {
-        
+
         try {
             await initONNX();
         } catch (e) {
@@ -253,4 +253,64 @@
 
 
 
+
+    // ------ Main Orchestrator -------
+    let checkScheduled = false;
+    let lastTimeChecked = 0;
+    const CHECK_COOLDOWN_MS = 500;
+
+    async function trySkipButton(){
+        const player = document.getElementById('movie_player');
+        if (!player) return false;
+
+        // ==== Tier 1: Selectors ====
+        const learned = getLearnedSelector();
+        const selectorsToTry = learned ? [learned, ...KNOWN_SELECTORS] : KNOWN_SELECTORS ;
+        for (const selector of selectorsToTry){
+            try{
+                const button = player.querySelector(selector);
+                if(button && button.offsetParent !== null && !button.disabled){
+                    await humanClick(button);
+                    console.log(`Auto Ad Skipper: Skipped via selector "${selector}"`);
+                    setLearnedSelector(selector);
+                    return true;
+                }
+            }catch(e){}
+        }
+
+        // === Tier 2: NeoVision ====
+        try{
+            const neoButton = findSkipButtonViaNeo();
+            if(neoButton){
+                await humanClick(neoButton);
+                console.log("Auto Ad Skipper: Skipped via NeoVision");
+                if(neoButton.id) setLearnedSelector("#" + neoButton.id );
+                else if (neoButton.classList.length){
+                    setLearnedSelector("." + Array.from(neoButton.classList).join('.'));
+                }
+                return true;
+            }
+        }catch(e){
+            console.warn("Auto Ad Skipper: NeoVision error", e);
+        }
+
+
+        function scheduleCheck() {
+            if (checkScheduled) return;
+            checkScheduled = true;
+            requestAnimationFrame(() => {
+                const now = performance.now();
+                if (now - lastCheckTime >= CHECK_COOLDOWN_MS) {
+                    lastCheckTime = now;
+                    tryClickSkipButton().finally(() => { checkScheduled = false; });
+                } else {
+                    checkScheduled = false;
+                }
+            });
+        }
+
+        
+
+
+    }
 })
