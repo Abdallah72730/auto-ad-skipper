@@ -198,6 +198,59 @@
         return boxes;
     }
 
-    
+    async function findSkipButtonViaAI() {
+        
+        try {
+            await initONNX();
+        } catch (e) {
+            console.error('AI Detector: Failed to load model', e);
+            return null;
+        }
+
+        const video = document.querySelector('#movie_player video');
+        if (!video || video.videoWidth === 0) return null;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const inputTensor = await preprocessYOLO(canvas, 640);
+        const feeds = { 'images': inputTensor };
+        const results = await ortSession.run(feeds);
+        const output = results['output0'];
+        const boxes = postprocessYOLO(output, canvas.width, canvas.height, 0.5);
+
+        const videoRect = video.getBoundingClientRect();
+        let bestBox = null;
+        let bestScore = 0;
+
+        for (const box of boxes) {
+            if (box.confidence > 0.6) {
+                const centerX = videoRect.left + box.x * videoRect.width;
+                const centerY = videoRect.top + box.y * videoRect.height;
+                // Favor bottom-right quadrant (where skip button usually is)
+                const quadrantScore = (centerX > videoRect.left + videoRect.width * 0.6 &&
+                                       centerY > videoRect.top + videoRect.height * 0.6) ? 1.5 : 1.0;
+                const totalScore = box.confidence * quadrantScore;
+                if (totalScore > bestScore) {
+                    bestScore = totalScore;
+                    bestBox = { x: centerX, y: centerY };
+                }
+            }
+        }
+
+        if (bestBox) {
+            const element = document.elementFromPoint(bestBox.x, bestBox.y);
+            if (element) {
+                console.log('AI Detector: Found skip button at', bestBox);
+                return element;
+            }
+        }
+        return null;
+    }
+
+
 
 })
