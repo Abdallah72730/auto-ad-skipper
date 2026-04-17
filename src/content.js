@@ -131,4 +131,73 @@
         }
         return null;
     }
+
+
+
+    // ---- Tier 3: Ai Vision (ONXX Model) -----
+    let ortSession = null;
+    let ortLib = null;
+
+    async function initONXX(){
+        if (ortSession) return;
+        //ort is global if loaded via manifest content_scripts
+        ortLib = (typeof ort !== 'undefined') ? ort : (await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/esm/ort.min.js')).default;
+        const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
+        console.log('AI Detector: Loading model from ', modelUrl);
+        ortSession = await ortLib.InferenceSession.create(modelUrl, {"executionProviders": ['wasm']});
+        console.log('AI detector: Model loaded.');
+    }
+
+    async function preprocessYOLO(canvas, targetSize){
+        const resized = document.createElement('canvas');
+        resized.width = targetSize;
+        resized.height = targetSize;
+        const rCtx = resized.getContext('2d');
+        rCtx.drawImage(canvas, 0, 0, targetSize, targetSize);
+        const imageData = rCtx.getImageData(0, 0, targetSize, targetSize);
+        const data = imageData.data;
+        const inputArray = new Float32Array(1 * 3 * targetSize * targetSize);
+        const pixelsPerChannel = targetSize * targetSize;
+        
+        for(let i = 0; i < data.length; i+= 4){
+            const pixelIdx = i / 4;
+            const r = data[i] / 255.0;
+            const g = data[i+1] / 255.0;
+            const b = data[i + 2] / 255.0;
+            
+            inputArray[pixelIdx] = r;
+            inputArray[pixelsPerChannel + pixelIdx] = g;
+            inputArray[2 * pixelsPerChannel + pixelIdx] = b;
+        }
+        return new ortLib.Tensor('float32', inputArray, [1, 3, targetSize, targetSize]);
+    }
+
+
+    async function postprocessYOLO(outputTensor, imgWidth, imgHeight, confThreshold =0.5){
+        const data = outputTensor.data;
+        const [batch, numChannels, numAnchors] = outputTensor.dims;
+        const numClasses = numChannels - 4;
+        const boxes = [];
+        for (let i = 0; i < numAnchors; i++){
+            let maxConf = 0;
+            let classId = -1;
+            for (let c = 0; c < numClasses; c++){
+                const conf = data[i * numChannels + 4 + c];
+                if (conf > maxConf){
+                    maxConf = conf;
+                    classId = c;
+                }
+            }
+            if(maxConf < confThreshold ) continue;
+            const cx = data[i * numChannels + 0];
+            const cy = data[i * numChannels + 1];
+            const w = data[i * numChannels + 2];
+            const h = data[i * numChannels + 3];
+            boxes.push({x:cx, y:cy, width: w, height: h, confidence: maxConf, class: classId});
+        }
+        return boxes;
+    }
+
+    
+
 })
