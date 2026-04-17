@@ -294,6 +294,9 @@
             console.warn("Auto Ad Skipper: NeoVision error", e);
         }
 
+        return false;
+    }
+
 
         function scheduleCheck() {
             if (checkScheduled) return;
@@ -330,6 +333,14 @@
                     }
                 }
             });
+
+            adContainers.forEach(container => {
+                observer.observe(container, {childList: true, subtree: true});
+            });
+
+            console.log("Auto Ad Skipper: Observer Active ");
+            scheduleCheck();
         }
-    }
-})
+        
+        startObserver()
+})();
