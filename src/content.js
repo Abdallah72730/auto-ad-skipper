@@ -49,9 +49,10 @@
             // Build a robust selector for the injected function
             let selector = '';
             if (element.id) {
-                selector =`#${CSS.escape(element.id)}`;
+                // Escape the ID and include the '#'
+                selector = `#${CSS.escape(element.id)}`;
             } else {
-                // Use class list
+                // Fallback: use tag name + escaped classes
                 const classes = Array.from(element.classList).map(c => `.${CSS.escape(c)}`).join('');
                 selector = `${element.tagName.toLowerCase()}${classes}`;
             }
