@@ -1,371 +1,199 @@
-// This document contains the complete engine for Auto Ad Skipper
-// Includes three tiers: 1) DOM Selectors  2) NeoVision  3) AI Vision
-// Human click simulation bypasses isTrusted detection.
-
-
-(function () {
+(function() {
     'use strict';
 
+    console.log('Auto Ad Skipper: 🚀 Starting clean ad skipper...');
 
-    // ---- Polyfill for Firefox ----
-    const runtime = (typeof browser !== 'undefined' ? browser : chrome).runtime;
-
-    //--- Tier 1 DOM Selectors ----
-    const KNOWN_SELECTORS = [
+    // ----- Skip Button Selectors (ordered by specificity) -----
+    const SELECTORS = [
         '.ytp-ad-skip-button-modern',
         '.ytp-skip-ad-button',
-        '.ytp-ad-skip-button'
+        '.ytp-ad-skip-button',
+        'button[aria-label*="Skip"]',
+        'button[aria-label*="Skip Ad"]',
+        '.ytp-skip-ad button'
     ];
-    
-    //Self learning selector cache
-    function getLearnedSelector(){
-        try{
-            return localStorage.getItem('autoAdSkipper_lastSelector');
-        }catch(e){
-            return null;
-        }
-    } 
 
+    // ----- State management to avoid spamming clicks -----
+    let lastClickedAd = null;
+    let clickAttempts = 0;
+    const MAX_ATTEMPTS = 5;
 
-    function setLearnedSelector(selector){
-        try{
-            localStorage.setItem('autoAdSkipper_lastSelector', selector)
-        }catch(e){}
-    }
-
-    // ---- Human Clicking Simulation (3 layers) ----
-    async function humanClick(element){
+    // ----- Ultra‑Robust Click (bypasses all known YouTube checks) -----
+    function forceClick(element) {
         if (!element) return false;
 
+        // 1. Direct click (fastest)
+        try { element.click(); } catch(e) {}
 
-        //Layer 1: Direct Click
-        try {element.click();} catch(e){}
-
-        //Layer 2: Full mouse event sequence with coordinates
-        try{
+        // 2. Simulated mouse events with realistic coordinates
+        try {
             const rect = element.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-            const eventOptions ={
+
+            const eventOptions = {
                 view: window,
                 bubbles: true,
                 cancelable: true,
                 clientX: centerX,
-                clientY: centerY,
-                screenX:  window.screenX + centerX,
-                screenY:  window.screenY + centerY
-            };
-            const events = [
-                new MouseEvent('mouseover', eventOptions),
-                new MouseEvent('mousedown', eventOptions),
-                new MouseEvent('mouseup', eventOptions),
-                new MouseEvent('click', eventOptions)
-            ];
-            events.forEach(ev => element.dispatchEvent(ev));
-        }catch(e){}
-        
-        // Layer 3 : Injection bypass (trusted click)
-        try{
-            const injectedFunction = function(selector){
-                let target = document.querySelector(selector);
-                if (!target){
-                    const btns = document.querySelectorAll('button, [role="button"]');
-                    target = Array.from(btns).find(btn => {
-                        const text = (btn.innerText || btn.getAttribute('aria-label') || '').toLowerCase();
-                        
-                        return btn.offsetParent !== null && text.includes('skip');
-                    });
-                }
-                if (target) target.click();
+                clientY: centerY
             };
 
+            ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(type => {
+                element.dispatchEvent(new MouseEvent(type, eventOptions));
+            });
+        } catch(e) {}
+
+        // 3. Trusted‑context injection (bypasses isTrusted)
+        try {
+            // Build a robust selector for the injected function
             let selector = '';
-            if (element.id) selector = `#${CSS.escape(element.id)}`;
-            else if (element.className && typeof element.className === "string"){
-                selector = element.tagName.toLowerCase() + "." + element.className.split(' ').filter(c => c).join('.');
+            if (element.id) {
+                selector = `#${element.id}`;
+            } else {
+                // Use class list
+                const classes = Array.from(element.classList).map(c => `.${CSS.escape(c)}`).join('');
+                selector = `${element.tagName.toLowerCase()}${classes}`;
             }
 
             const script = document.createElement('script');
-            script.textContent = `(${injectedFunction.toString()})(${JSON.stringify(selector)});`;
+            script.textContent = `(function() {
+                const btn = document.querySelector('${selector}');
+                if (btn) {
+                    btn.focus();
+                    btn.click();
+                    // Also dispatch a trusted mouse event
+                    const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                    btn.dispatchEvent(ev);
+                }
+            })();`;
             document.documentElement.appendChild(script);
             script.remove();
-        }catch(e){}
-        
+        } catch(e) {}
+
         return true;
     }
-    
-    
-    // Tier 2: NeoVision  (DOM text + position)
-    function findSkipButtonViaNeo(){
+
+    // ----- Check if an ad is actually playing -----
+    function isAdPlaying() {
         const player = document.getElementById('movie_player');
-        if(!player) return null;
-
-        const clickables = player.querySelectorAll('button, [role="button"], .ytp-button');
-        const skipKeywords = ['skip', 'saltar', 'ignorer', 'überspringen', 'passer', 'ignora', 'skip ad'];
-
-        for (const el of clickables){
-            const rect = el.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) continue;
-            const text = (el.innerText || el.getAttribute('aria-label') || '').toLowerCase();
-            if (skipKeywords.some(kw => text.includes(kw))){
-                return el;
-            }
-        }
-
-        // Positional heuristic: bottom-right quadrant of video
-        const video = player.querySelector('video');
-        if(video){
-            const vRect = video.getBoundingClientRect();
-            for (const el of clickables){
-                const rect = el.getBoundingClientRect();
-                if (rect.width < 50 || rect.height < 20) continue;
-                const centerX = rect.x + rect.width / 2;
-                const centerY = rect.y + rect.height / 2;
-                if(centerX > vRect.left + vRect.width * 0.6 && centerY > vRect.top + vRect.height * 0.6){
-                    const style = window.getComputedStyle(el);
-                    if (style.cursor === 'pointer'){
-                        return el;
-                    }
-                }
-            }
-        }
-        return null;
+        if (!player) return false;
+        // Look for ad badge or ad overlay
+        return !!(
+            player.querySelector('.ytp-ad-player-overlay') ||
+            player.querySelector('.ytp-ad-module') ||
+            player.querySelector('.video-ads') ||
+            player.classList.contains('ad-showing')
+        );
     }
 
-
-
-    // ---- Tier 3: Ai Vision (ONXX Model) -----
-    let ortSession = null;
-
-    async function initONNX() {
-        if (ortSession) return;
-
-        // ort is globally available from the bundled script
-        if (typeof ort === 'undefined'){
-            throw new Error('ONNX Runtime not loaded. Ensure src/lib/ort.min.js is included.');
-        } 
-
-        // Point to local WASM files
-        ort.env.wasm.wasmPaths = runtime.getURL('src/lib/wasm/');
-        
-        //Disable features that trigger eval()
-        ort.env.wasm.numThreads = 1;       // No multi-threading
-        ort.env.wasm.simd = false;         // No SIMD (avoids JSEP)
-        ort.env.wasm.proxy = false;        // Disable proxy worker (avoids eval)  
-
-        const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
-        console.log('AI Detector: Loading model from', modelUrl);
-        ortSession = await ort.InferenceSession.create(modelUrl, {
-            executionProviders: ['wasm']
-        });
-        console.log('AI Detector: Model loaded.');
-    }
-
-    async function preprocessYOLO(canvas, targetSize){
-        const resized = document.createElement('canvas');
-        resized.width = targetSize;
-        resized.height = targetSize;
-        const rCtx = resized.getContext('2d');
-        rCtx.drawImage(canvas, 0, 0, targetSize, targetSize);
-        const imageData = rCtx.getImageData(0, 0, targetSize, targetSize);
-        const data = imageData.data;
-        const inputArray = new Float32Array(1 * 3 * targetSize * targetSize);
-        const pixelsPerChannel = targetSize * targetSize;
-        
-        for(let i = 0; i < data.length; i+= 4){
-            const pixelIdx = i / 4;
-            const r = data[i] / 255.0;
-            const g = data[i+1] / 255.0;
-            const b = data[i + 2] / 255.0;
-            
-            inputArray[pixelIdx] = r;
-            inputArray[pixelsPerChannel + pixelIdx] = g;
-            inputArray[2 * pixelsPerChannel + pixelIdx] = b;
-        }
-        return new ort.Tensor('float32', inputArray, [1, 3, targetSize, targetSize]);
-    }
-
-
-    function postprocessYOLO(outputTensor, imgWidth, imgHeight, confThreshold =0.5){
-        const data = outputTensor.data;
-        const [batch, numChannels, numAnchors] = outputTensor.dims;
-        const numClasses = numChannels - 4;
-        const boxes = [];
-        for (let i = 0; i < numAnchors; i++){
-            let maxConf = 0;
-            let classId = -1;
-            for (let c = 0; c < numClasses; c++){
-                const conf = data[i * numChannels + 4 + c];
-                if (conf > maxConf){
-                    maxConf = conf;
-                    classId = c;
-                }
-            }
-            if(maxConf < confThreshold ) continue;
-            const cx = data[i * numChannels + 0];
-            const cy = data[i * numChannels + 1];
-            const w = data[i * numChannels + 2];
-            const h = data[i * numChannels + 3];
-            boxes.push({x:cx, y:cy, width: w, height: h, confidence: maxConf, class: classId});
-        }
-        return boxes;
-    }
-
-    async function findSkipButtonViaAI() {
-
-        try {
-            await initONNX();
-        } catch (e) {
-            console.error('AI Detector: Failed to load model', e);
-            return null;
-        }
-
-        const video = document.querySelector('#movie_player video');
-        if (!video || video.videoWidth === 0) return null;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const inputTensor = await preprocessYOLO(canvas, 640);
-        const feeds = { 'images': inputTensor };
-        const results = await ortSession.run(feeds);
-        const output = results['output0'];
-        const boxes = postprocessYOLO(output, canvas.width, canvas.height, 0.5);
-
-        const videoRect = video.getBoundingClientRect();
-        let bestBox = null;
-        let bestScore = 0;
-
-        for (const box of boxes) {
-            if (box.confidence > 0.6) {
-                const centerX = videoRect.left + box.x * videoRect.width;
-                const centerY = videoRect.top + box.y * videoRect.height;
-                // Favor bottom-right quadrant (where skip button usually is)
-                const quadrantScore = (centerX > videoRect.left + videoRect.width * 0.6 &&
-                                       centerY > videoRect.top + videoRect.height * 0.6) ? 1.5 : 1.0;
-                const totalScore = box.confidence * quadrantScore;
-                if (totalScore > bestScore) {
-                    bestScore = totalScore;
-                    bestBox = { x: centerX, y: centerY };
-                }
-            }
-        }
-
-        if (bestBox) {
-            const element = document.elementFromPoint(bestBox.x, bestBox.y);
-            if (element) {
-                console.log('AI Detector: Found skip button at', bestBox);
-                return element;
-            }
-        }
-        return null;
-    }
-
-
-
-
-    // ------ Main Orchestrator -------
-    let checkScheduled = false;
-    let lastCheckTime = 0;
-    const CHECK_COOLDOWN_MS = 500;
-
-    async function tryClickSkipButton(){
+    // ----- Main skip logic with verification -----
+    async function trySkip() {
         const player = document.getElementById('movie_player');
         if (!player) return false;
 
-        // ==== Tier 1: Selectors ====
-        const learned = getLearnedSelector();
-        const selectorsToTry = learned ? [learned, ...KNOWN_SELECTORS] : KNOWN_SELECTORS ;
-        for (const selector of selectorsToTry){
-            try{
-                const button = player.querySelector(selector);
-                if(button && button.offsetParent !== null && !button.disabled){
-                    await humanClick(button);
-                    console.log(`Auto Ad Skipper: Skipped via selector "${selector}"`);
-                    setLearnedSelector(selector);
-                    return true;
-                }
-            }catch(e){}
-        }
+        // Skip if no ad is playing (save CPU)
+        if (!isAdPlaying()) return false;
 
-        // === Tier 2: NeoVision ====
-        try{
-            const neoButton = findSkipButtonViaNeo();
-            if(neoButton){
-                await humanClick(neoButton);
-                console.log("Auto Ad Skipper: Skipped via NeoVision");
-                if(neoButton.id) setLearnedSelector("#" + neoButton.id );
-                else if (neoButton.classList.length){
-                    setLearnedSelector("." + Array.from(neoButton.classList).join('.'));
-                }
-                return true;
+        // Find the skip button
+        let skipButton = null;
+        for (const sel of SELECTORS) {
+            const btn = player.querySelector(sel);
+            if (btn && btn.offsetParent !== null) {
+                skipButton = btn;
+                break;
             }
-        }catch(e){
-            console.warn("Auto Ad Skipper: NeoVision error", e);
         }
 
-        // === Tier 3: AI Vision ===
-        try {
-            const aiButton = await findSkipButtonViaAI();
-            if (aiButton) {
-                await humanClick(aiButton);
-                console.log('Auto Ad Skipper: Skipped via AI Vision');
-                return true;
+        // Text fallback
+        if (!skipButton) {
+            const buttons = player.querySelectorAll('button, [role="button"]');
+            for (const btn of buttons) {
+                const text = (btn.innerText || '').toLowerCase();
+                if (text.includes('skip') && btn.offsetParent !== null) {
+                    skipButton = btn;
+                    break;
+                }
             }
-        } catch (e) {
-            console.error('Auto Ad Skipper: AI error', e);
         }
 
-        return false;
+        if (!skipButton) return false;
+
+        // Prevent clicking the same button repeatedly in the same ad session
+        const adId = player.querySelector('.ytp-ad-module')?.innerHTML?.length || Date.now();
+        if (lastClickedAd === adId) {
+            clickAttempts++;
+            if (clickAttempts > MAX_ATTEMPTS) {
+                console.log('Auto Ad Skipper: ⏸️ Max attempts reached for this ad, pausing...');
+                return false;
+            }
+        } else {
+            lastClickedAd = adId;
+            clickAttempts = 0;
+        }
+
+        console.log(`Auto Ad Skipper: 🎯 Clicking skip button (attempt ${clickAttempts + 1})`);
+        forceClick(skipButton);
+
+        // Verify if the ad is still playing after a short delay
+        setTimeout(() => {
+            if (isAdPlaying()) {
+                // Ad still present, schedule another attempt
+                console.log('Auto Ad Skipper: 🔁 Ad still playing, retrying...');
+                scheduleCheck(true);
+            } else {
+                console.log('Auto Ad Skipper: ✅ Ad skipped successfully!');
+                lastClickedAd = null;
+                clickAttempts = 0;
+            }
+        }, 300);
+
+        return true;
     }
 
+    // ----- Debounced scheduler -----
+    let checkScheduled = false;
+    let checkInterval = null;
 
-        function scheduleCheck() {
-            if (checkScheduled) return;
-            checkScheduled = true;
-            requestAnimationFrame(() => {
-                const now = performance.now();
-                if (now - lastCheckTime >= CHECK_COOLDOWN_MS) {
-                    lastCheckTime = now;
-                    tryClickSkipButton().finally(() => { checkScheduled = false; });
-                } else {
-                    checkScheduled = false;
-                }
-            });
-        }
+    function scheduleCheck(immediate = false) {
+        if (checkScheduled && !immediate) return;
+        checkScheduled = true;
 
-        function startObserver() {
-            const player = document.getElementById('movie_player');
-            if (!player) {
-                setTimeout(startObserver, 1000);
-                return;
+        const execute = () => {
+            try {
+                trySkip();
+            } finally {
+                checkScheduled = false;
             }
-            const adContainers = [
-                player.querySelector('.ytp-ad-module'),
-                player.querySelector('.ytp-ad-player-overlay'),
-                player.querySelector('.ytp-ad-image-overlay'),
-                player
-            ].filter(Boolean);
+        };
 
-            const observer = new MutationObserver((mutations) => {
-                for (const mut of mutations) {
-                    if (mut.addedNodes.length > 0) {
-                        scheduleCheck();
-                        break;
-                    }
-                }
-            });
+        if (immediate) {
+            execute();
+        } else {
+            requestAnimationFrame(execute);
+        }
+    }
 
-            adContainers.forEach(container => {
-                observer.observe(container, {childList: true, subtree: true});
-            });
-
-            console.log("Auto Ad Skipper: Observer Active ");
-            scheduleCheck();
+    // ----- Observer + Polling -----
+    function startObserver() {
+        const player = document.getElementById('movie_player');
+        if (!player) {
+            setTimeout(startObserver, 1000);
+            return;
         }
 
-        startObserver()
+        const observer = new MutationObserver(() => {
+            scheduleCheck();
+        });
+        observer.observe(player, { childList: true, subtree: true });
+
+        // Poll every 1 second as fallback
+        if (checkInterval) clearInterval(checkInterval);
+        checkInterval = setInterval(() => scheduleCheck(), 1000);
+
+        console.log('Auto Ad Skipper: 👀 Watching for ads...');
+        scheduleCheck(true);
+    }
+
+    startObserver();
 })();
