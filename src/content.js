@@ -49,7 +49,7 @@
             // Build a robust selector for the injected function
             let selector = '';
             if (element.id) {
-                selector =`${CSS.escape(element.id)}`;
+                selector =`#${CSS.escape(element.id)}`;
             } else {
                 // Use class list
                 const classes = Array.from(element.classList).map(c => `.${CSS.escape(c)}`).join('');
