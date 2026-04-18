@@ -80,7 +80,7 @@
             };
 
             let selector = '';
-            if (element.id) selector = "#" + element.id;
+            if (element.id) selector = `#${CSS.escape(element.id)}`;
             else if (element.className && typeof element.className === "string"){
                 selector = element.tagName.toLowerCase() + "." + element.className.split(' ').filter(c => c).join('.');
             }
@@ -136,21 +136,18 @@
 
     // ---- Tier 3: Ai Vision (ONXX Model) -----
     let ortSession = null;
-    let ortLib = null;
 
     async function initONNX() {
         if (ortSession) return;
 
-        // Load ONNX Runtime Web dynamically from CDN
-        if (!ortLib) {
-            console.log('AI Detector: Loading ONNX Runtime from CDN...');
-            ortLib = await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/esm/ort.min.js');
-            console.log('AI Detector: ONNX Runtime loaded.');
-        }
+        // ort is globally available from the bundled script
+        if (typeof ort === 'undefined'){
+            throw new Error('ONNX Runtime not loaded. Ensure src/lib/ort.min.js is included.');
+        } 
 
         const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
         console.log('AI Detector: Loading model from', modelUrl);
-        ortSession = await ortLib.InferenceSession.create(modelUrl, {
+        ortSession = await ort.InferenceSession.create(modelUrl, {
             executionProviders: ['wasm']
         });
         console.log('AI Detector: Model loaded.');
@@ -177,7 +174,7 @@
             inputArray[pixelsPerChannel + pixelIdx] = g;
             inputArray[2 * pixelsPerChannel + pixelIdx] = b;
         }
-        return new ortLib.Tensor('float32', inputArray, [1, 3, targetSize, targetSize]);
+        return new ort.Tensor('float32', inputArray, [1, 3, targetSize, targetSize]);
     }
 
 

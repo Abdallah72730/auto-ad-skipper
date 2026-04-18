@@ -10,7 +10,10 @@
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
-            "js": ["src/content.js"],
+            "js": [
+                "src/lib/ort.min.js",
+                "src/content.js"
+            ],
             "run_at":"document_idle"
         }
     ],
