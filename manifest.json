@@ -1,35 +1,40 @@
 {
-    "manifest_version": 3,
-    "name": "Auto Ad Skipper",
-    "version": "1.0.0",
-    "description": "Open-source Youtube ad skipper with self-healing AI vision.",
-    "permissions": [],
-    "host_permissions":[
-        "*://*.youtube.com/*"
-    ],
-    "content_scripts": [
-        {
-            "matches": ["*://*.youtube.com/*"],
-            "js": [
-                "src/lib/ort.min.js",
-                "src/content.js"
-            ],
-            "run_at":"document_idle"
-        }
-    ],
-    "web_accessible_resources":[
-        {
-            "resources":["src/model/*.onnx", 
-            "src/lib/wasm/*.wasm",
-            "src/lib/wasm/*.mjs"],
-            "matches": ["*://*.youtube.com/*"]
-        }
-    ],
-    "browser_specific_settings":{
-        "gecko":{
-            "id":"auto_ad_skipper@Abdallah72730.github.io",
-            "strict_min_version": "112.0",
-            "update_url":"https://Abdallah72730.github.io/auto-ad-skipper/updates.json"
-        }
+  "manifest_version": 3,
+  "name": "Auto Ad Skipper",
+  "version": "1.0.0",
+  "description": "Open-source YouTube ad skipper with self-healing AI vision.",
+  "permissions": [],
+  "host_permissions": [
+    "*://*.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": [
+        "src/lib/ort.min.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/model/*.onnx",
+        "src/lib/wasm/*.wasm",
+        "src/lib/wasm/*.mjs"
+      ],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "auto_ad_skipper@Abdallah72730.github.io",
+      "strict_min_version": "112.0",
+      "update_url": "https://Abdallah72730.github.io/auto-ad-skipper/updates.json"
+    }
+  }
 }
