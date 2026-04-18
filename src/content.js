@@ -145,6 +145,9 @@
             throw new Error('ONNX Runtime not loaded. Ensure src/lib/ort.min.js is included.');
         } 
 
+        ort.env.wasm.wasmPaths = runtime.getURL('src/lib/wasm/');
+        ort.env.wasm.numThreads = 1;
+
         const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
         console.log('AI Detector: Loading model from', modelUrl);
         ortSession = await ort.InferenceSession.create(modelUrl, {

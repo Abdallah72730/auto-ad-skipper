@@ -19,7 +19,9 @@
     ],
     "web_accessible_resources":[
         {
-            "resources":["src/model/*.onnx"],
+            "resources":["src/model/*.onnx", 
+            "src/lib/wasm/*.wasm",
+            "src/lib/wasm/*.mjs"],
             "matches": ["*://*.youtube.com/*"]
         }
     ],
