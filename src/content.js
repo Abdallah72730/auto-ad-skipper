@@ -145,8 +145,13 @@
             throw new Error('ONNX Runtime not loaded. Ensure src/lib/ort.min.js is included.');
         } 
 
+        // Point to local WASM files
         ort.env.wasm.wasmPaths = runtime.getURL('src/lib/wasm/');
-        ort.env.wasm.numThreads = 1;
+        
+        //Disable features that trigger eval()
+        ort.env.wasm.numThreads = 1;       // No multi-threading
+        ort.env.wasm.simd = false;         // No SIMD (avoids JSEP)
+        ort.env.wasm.proxy = false;        // Disable proxy worker (avoids eval)  
 
         const modelUrl = runtime.getURL('src/model/yolov8n.onnx');
         console.log('AI Detector: Loading model from', modelUrl);
