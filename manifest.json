@@ -1,13 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Auto Ad Skipper",
-  "version": "1.0.0",
-  "description": "Open-source YouTube ad skipper.",
-  
+  "version": "2.0.0",
+  "description": "Automatically clicks the Skip Ad button on YouTube. Mutes ad audio and handles SPA navigation.",
+
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+
   "permissions": [],
+
   "host_permissions": [
     "*://*.youtube.com/*"
   ],
+
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
@@ -15,9 +22,10 @@
       "run_at": "document_idle"
     }
   ],
+
   "browser_specific_settings": {
     "gecko": {
-      "id": "auto_ad_skipper@Abdallah72730.github.io",
+      "id": "auto-ad-skipper@local.dev",
       "strict_min_version": "112.0"
     }
   }
