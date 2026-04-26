@@ -159,35 +159,7 @@
     return null;
   }
 
-  // ──────────────────────────────────────────────────────────
-  //  Ad muting (quality-of-life)
-  // ──────────────────────────────────────────────────────────
 
-  /**
-   * Mutes the video element while an ad is playing so the user
-   * doesn't hear the ad audio during the brief moment before the
-   * skip button appears.
-   *
-   * We store the original muted state and restore it after the ad
-   * so we don't permanently mute a user who had sound on.
-   */
-  let originalMutedState = null;
-
-  function muteAdAudio() {
-    const video = document.querySelector('video');
-    if (!video) return;
-    if (originalMutedState === null) {
-      originalMutedState = video.muted;
-    }
-    video.muted = true;
-  }
-
-  function restoreAudio() {
-    const video = document.querySelector('video');
-    if (!video || originalMutedState === null) return;
-    video.muted = originalMutedState;
-    originalMutedState = null;
-  }
 
   // ──────────────────────────────────────────────────────────
   //  Main skip action
@@ -210,14 +182,9 @@
     if (!isAdPlaying()) return;
 
     const btn = findSkipButton();
-    if (!btn) {
-      // Button not visible yet — mute while we wait for it to appear
-      muteAdAudio();
-      return;
-    }
+    if (!btn) return;
 
     skipInProgress = true;
-    muteAdAudio();
 
     console.log('[Auto Ad Skipper] Skip button found — clicking.');
 
@@ -229,7 +196,6 @@
 
     if (!isAdPlaying()) {
       console.log('[Auto Ad Skipper] ✅ Ad skipped successfully.');
-      restoreAudio();
     } else {
       // Ad is still playing — either it's non-skippable, or the click
       // didn't register (e.g. button was momentarily stale). Try once more.
@@ -238,36 +204,24 @@
       if (btn2) btn2.click();
       await new Promise(r => setTimeout(r, COOLDOWN_MS));
       if (!isAdPlaying()) {
-        restoreAudio();
         console.log('[Auto Ad Skipper] ✅ Ad skipped on retry.');
       } else {
         console.log('[Auto Ad Skipper] ℹ️  Ad appears non-skippable — waiting it out.');
-        // Keep audio muted during non-skippable ad, restore when it ends
-        waitForAdEnd();
       }
     }
 
     skipInProgress = false;
   }
 
-  /**
-   * Polls until the ad ends, then restores audio.
-   * Used only when the ad is non-skippable so we don't leave the
-   * user permanently muted.
-   */
-  function waitForAdEnd() {
-    const timer = setInterval(() => {
-      if (!isAdPlaying()) {
-        clearInterval(timer);
-        restoreAudio();
-        console.log('[Auto Ad Skipper] ℹ️  Non-skippable ad ended — audio restored.');
-      }
-    }, 500);
-  }
-
   // ──────────────────────────────────────────────────────────
   //  Watcher lifecycle
   // ──────────────────────────────────────────────────────────
+
+  document.addEventListener('yt-navigate-finish', () => {
+    console.log('[Auto Ad Skipper] 🔄 YouTube navigation detected — restarting watcher.');
+    skipInProgress = false;
+    startWatcher();
+  });
 
   /**
    * Tears down any existing observer and interval before starting fresh.
@@ -332,7 +286,7 @@
       }
     }, POLL_INTERVAL_MS);
 
-    console.log('[Auto Ad Skipper] Watching for ads...');
+    console.log('[Auto Ad Skipper] 👀 Watching for ads...');
 
     // Handle the case where the script loads while an ad is already playing
     if (isAdPlaying()) {
@@ -352,7 +306,7 @@
    * navigation to make sure we're observing the refreshed player.
    */
   document.addEventListener('yt-navigate-finish', () => {
-    console.log('[Auto Ad Skipper] YouTube navigation detected — restarting watcher.');
+    console.log('[Auto Ad Skipper] 🔄 YouTube navigation detected — restarting watcher.');
     skipInProgress = false; // reset state for new page
     originalMutedState = null;
     startWatcher();
@@ -362,7 +316,7 @@
   //  Entry point
   // ──────────────────────────────────────────────────────────
 
-  console.log('[Auto Ad Skipper] Loaded.');
+  console.log('[Auto Ad Skipper] 🚀 Loaded.');
   startWatcher();
 
 })();
